@@ -1,6 +1,26 @@
 borough,animal_name,record_count
 Manhattan,Charlie,2579
+Manhattan,Luna,2280
+Manhattan,Bella,2103
+Manhattan,Lucy,2092
+Manhattan,Lola,1981
 Brooklyn,Bella,2158
+Brooklyn,Luna,1930
+Brooklyn,Max,1768
+Brooklyn,Charlie,1511
+Brooklyn,Rocky,1370
 Queens,Bella,2180
+Queens,Max,1856
+Queens,Coco,1564
+Queens,Luna,1481
+Queens,Rocky,1308
 Bronx,Bella,1203
+Bronx,Max,1011
+Bronx,Luna,960
+Bronx,Coco,828
+Bronx,Rocky,743
 Staten Island,Bella,1046
+Staten Island,Max,762
+Staten Island,Coco,671
+Staten Island,Rocky,622
+Staten Island,Bailey,601
