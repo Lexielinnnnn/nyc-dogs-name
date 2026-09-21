@@ -1,0 +1,5 @@
+Chi-square test: name distribution across birth-year buckets
+Names included (>= 20 total records): 4142
+Birth-year buckets: ['1990-1994', '1995-1999', '2000-2004', '2005-2009', '2010-2014', '2015-2019', '2020-2024', '2025-2029']
+chi2 = 176758.24, degrees of freedom = 28987, p-value = 0
+Interpretation: statistically significant (p < 0.05) -- name popularity does appear to shift across birth-year buckets

@@ -72,6 +72,7 @@ PLACEHOLDER_NAMES = {
     "NAN",
     "NULL",
     "<NA>",
+    "NAME"
 }
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
