@@ -61,6 +61,7 @@ COLUMN_ALIASES: dict[str, list[str]] = {
 # Values that mean "no real name was given," seen in this dataset.
 PLACEHOLDER_NAMES = {
     "",
+    "NAME",
     "NAME NOT PROVIDED",
     "NAME NOT PROVI",
     "UNKNOWN",
