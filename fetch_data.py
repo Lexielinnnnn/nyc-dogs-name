@@ -15,65 +15,96 @@ Optional:
 
 import os
 import sys
+import csv
 from pathlib import Path
 
 import requests
 
-# The v3 "query.csv" endpoint exports the full dataset as CSV.
-# You can optionally append SoQL parameters to the query string, e.g.
-# "&$select=animalname,animalbirth,breedname,zipcode,borough,gender"
-# to only pull the columns you actually need (smaller file, faster).
+# Download all pages with stable ordering and verify the record count.
 DATASET_ID = "nu7n-tubp"
-BASE_URL = f"https://data.cityofnewyork.us/api/v3/views/{DATASET_ID}/query.csv"
+BASE_URL = f"https://data.cityofnewyork.us/resource/{DATASET_ID}.json"
 
-# If you'd rather pull only the columns needed for the dog-names story,
-# uncomment SELECT_COLUMNS and pass it into fetch_csv() below.
+# Default API fields; borough is derived from ZIP codes during cleaning.
 SELECT_COLUMNS = [
     "animalname",
     "animalgender",
-    "animalbirthyr",
+    "animalbirth",
     "breedname",
     "zipcode",
-    "borough",
     "licenseissueddate",
     "licenseexpireddate",
+    "extract_year",
 ]
 
-OUTPUT_PATH = Path("data/raw/nyc_dog_licenses_raw.csv")
+PROJECT_ROOT = Path(__file__).resolve().parent
+OUTPUT_PATH = PROJECT_ROOT / "data/raw/nyc_dog_licenses_raw.csv"
 
 
 def fetch_csv(output_path: Path, select_columns: list[str] | None = None) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    params = {}
-    if select_columns:
-        params["$select"] = ",".join(select_columns)
+    columns = select_columns if select_columns is not None else SELECT_COLUMNS
 
     app_token = os.environ.get("NYC_OPEN_DATA_APP_TOKEN")
     headers = {"X-App-Token": app_token} if app_token else {}
 
     print(f"Requesting: {BASE_URL}")
-    if params:
-        print(f"With params: {params}")
 
-    with requests.get(
-        BASE_URL, params=params, headers=headers, stream=True, timeout=120
-    ) as response:
-        response.raise_for_status()
-        total_bytes = 0
-        with open(output_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
-                f.write(chunk)
-                total_bytes += len(chunk)
+    def query(params):
+        with requests.get(BASE_URL, params=params, headers=headers, timeout=120) as response:
+            response.raise_for_status()
+            result = response.json()
+        if not isinstance(result, list):
+            raise ValueError("Expected a list of API records.")
+        return result
 
-    print(f"Saved {total_bytes / 1_000_000:.1f} MB to {output_path}")
+    def get_count():
+        return int(query({"$select": "count(*) AS total"})[0]["total"])
+
+    expected = get_count()
+    if expected == 0:
+        raise ValueError("API returned no records; the existing CSV was not replaced.")
+
+    page_size, offset, downloaded = 50_000, 0, 0
+    seen_ids = set()
+    temporary_path = output_path.with_suffix(".csv.part")
+    try:
+        with temporary_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["api_row_id", *columns])
+            writer.writeheader()
+            while True:
+                rows = query({
+                    "$select": ":id AS api_row_id," + ",".join(columns),
+                    "$limit": page_size,
+                    "$offset": offset,
+                    "$order": ":id",
+                })
+                for row in rows:
+                    row_id = row.get("api_row_id")
+                    if row_id is None or row_id in seen_ids:
+                        raise ValueError("Missing or duplicate API row ID; retry download.")
+                    seen_ids.add(row_id)
+                writer.writerows(rows)
+                downloaded += len(rows)
+                print(f"Downloaded {downloaded:,} / {expected:,} records")
+                if len(rows) < page_size:
+                    break
+                offset += page_size
+
+        if downloaded != expected or get_count() != expected:
+            raise ValueError("Record count changed or download is incomplete; retry download.")
+        # These checks cannot detect every concurrent edit; keep this snapshot.
+        temporary_path.replace(output_path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+    print(f"Saved {downloaded:,} records to {output_path}")
 
 
 if __name__ == "__main__":
     try:
-        # Swap in SELECT_COLUMNS here if you want a slimmer raw file:
-        # fetch_csv(OUTPUT_PATH, select_columns=SELECT_COLUMNS)
         fetch_csv(OUTPUT_PATH)
-    except requests.HTTPError as e:
+    except (requests.RequestException, OSError, ValueError) as e:
         print(f"Request failed: {e}", file=sys.stderr)
         sys.exit(1)
